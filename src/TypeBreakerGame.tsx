@@ -79,6 +79,9 @@ const TypeBreakerGame: React.FC = () => {
   const [pressedKeys, setPressedKeys] = useState<Set<string>>(new Set());
   const [targetBrick, setTargetBrick] = useState<Brick | null>(null);
   const [showLetterHint, setShowLetterHint] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [canvasScale, setCanvasScale] = useState(1);
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
   
   // Store particles in a ref for smooth animation
   const particlesRef = useRef<Particle[]>([]);
@@ -408,7 +411,7 @@ const TypeBreakerGame: React.FC = () => {
     ctx.textBaseline = 'alphabetic';
   };
 
-  const drawUI = (ctx: CanvasRenderingContext2D, currentGameState: GameState) => {
+  const drawUI = (ctx: CanvasRenderingContext2D, currentGameState: GameState, mobile: boolean) => {
     // Show start screen if game hasn't started
     if (!currentGameState.gameStarted) {
       // Semi-transparent background
@@ -457,7 +460,20 @@ const TypeBreakerGame: React.FC = () => {
       ctx.fillStyle = '#FFFF00';
       ctx.font = 'bold 32px Arial';
       ctx.textAlign = 'center';
-      ctx.fillText(`Press: ${targetBrick.letter}`, CANVAS_WIDTH / 2, 60);
+      if (mobile) {
+        ctx.fillText(`Tap the block!`, CANVAS_WIDTH / 2, 60);
+      } else {
+        ctx.fillText(`Press: ${targetBrick.letter}`, CANVAS_WIDTH / 2, 60);
+      }
+      ctx.textAlign = 'left';
+    }
+    
+    // Mobile control hint
+    if (mobile && currentGameState.gameStarted && !currentGameState.paused) {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+      ctx.font = '14px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('Touch bottom area to control paddle', CANVAS_WIDTH / 2, CANVAS_HEIGHT - 10);
       ctx.textAlign = 'left';
     }
     
@@ -753,7 +769,7 @@ const TypeBreakerGame: React.FC = () => {
     }
     
     // Always draw UI (handles both start screen and game UI)
-    drawUI(ctx, gameState);
+    drawUI(ctx, gameState, isMobile);
     
     // Update game state only if game has started and not paused
     if (gameState.gameStarted && !gameState.paused && !gameState.gameOver && !gameState.gameWon) {
@@ -843,6 +859,84 @@ const TypeBreakerGame: React.FC = () => {
     }
   };
 
+  // Touch event handlers for mobile
+  const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (!gameState.gameStarted || gameState.paused || gameState.gameOver || gameState.gameWon) return;
+    
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    const x = (touch.clientX - rect.left) / canvasScale;
+    const y = (touch.clientY - rect.top) / canvasScale;
+    
+    // Check if touch is in bottom area for paddle control
+    if (y > CANVAS_HEIGHT - 200) {
+      setTouchStartX(x);
+    } else if (gameState.letterMode && isMobile) {
+      // Check if touch is on a brick
+      gameObjects.current.bricks.forEach(brick => {
+        if (brick.visible && brick.isTarget &&
+            x >= brick.x && x <= brick.x + brick.width &&
+            y >= brick.y && y <= brick.y + brick.height) {
+          // Mark brick as pressed
+          const currentTime = Date.now();
+          brick.lastKeyPressTime = currentTime;
+          setPressedKeys(new Set([brick.letter]));
+        }
+      });
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (!gameState.gameStarted || gameState.paused || gameState.gameOver || gameState.gameWon) return;
+    if (touchStartX === null) return;
+    
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    const x = (touch.clientX - rect.left) / canvasScale;
+    
+    // Move paddle based on touch position
+    const paddle = gameObjects.current.paddle;
+    paddle.x = x - paddle.width / 2;
+    
+    // Clamp paddle position
+    if (paddle.x < 0) paddle.x = 0;
+    if (paddle.x > CANVAS_WIDTH - paddle.width) paddle.x = CANVAS_WIDTH - paddle.width;
+  };
+
+  const handleTouchEnd = () => {
+    setTouchStartX(null);
+    if (isMobile && gameState.letterMode) {
+      setPressedKeys(new Set());
+    }
+  };
+
+  // Detect mobile and handle resize
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                     window.innerWidth < 768;
+      setIsMobile(mobile);
+      
+      // Calculate scale to fit canvas on screen
+      const maxWidth = window.innerWidth - 32; // 16px padding on each side
+      const maxHeight = window.innerHeight - 200; // Space for UI elements
+      const scaleX = maxWidth / CANVAS_WIDTH;
+      const scaleY = maxHeight / CANVAS_HEIGHT;
+      const scale = Math.min(scaleX, scaleY, 1); // Don't scale up, only down
+      setCanvasScale(scale);
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
   // Initialize game
   useEffect(() => {
     gameObjects.current.bricks = initializeBricks();
@@ -888,21 +982,35 @@ const TypeBreakerGame: React.FC = () => {
         </h1>
         {gameState.gameStarted && (
           <>
-            <p className="text-lg mb-2">Use ← → arrow keys to move paddle</p>
-            <p className="text-sm mb-1">Letter Mode: Press the letter on each block just before the ball hits it!</p>
-            <p className="text-sm mb-1">Classic Mode: Just break blocks with the ball!</p>
-            <p className="text-sm">Press 0 to switch modes • Press SPACE to pause • Press R to restart when game ends</p>
+            {isMobile ? (
+              <>
+                <p className="text-lg mb-2">Touch bottom area to move paddle</p>
+                <p className="text-sm mb-1">Letter Mode: Tap the highlighted block before the ball hits it!</p>
+                <p className="text-sm mb-1">Classic Mode: Just break blocks with the ball!</p>
+              </>
+            ) : (
+              <>
+                <p className="text-lg mb-2">Use ← → arrow keys to move paddle</p>
+                <p className="text-sm mb-1">Letter Mode: Press the letter on each block just before the ball hits it!</p>
+                <p className="text-sm mb-1">Classic Mode: Just break blocks with the ball!</p>
+                <p className="text-sm">Press 0 to switch modes • Press SPACE to pause • Press R to restart when game ends</p>
+              </>
+            )}
           </>
         )}
       </div>
       
-      <div className="relative">
+      <div className="relative" style={{ transform: `scale(${canvasScale})`, transformOrigin: 'top center' }}>
         <canvas
           ref={canvasRef}
           width={CANVAS_WIDTH}
           height={CANVAS_HEIGHT}
           className="border-2 border-purple-500 rounded-lg shadow-2xl"
           tabIndex={0}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          style={{ touchAction: 'none' }}
         />
         
         {gameState.paused && (
