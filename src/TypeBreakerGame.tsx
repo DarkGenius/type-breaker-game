@@ -231,13 +231,29 @@ const TypeBreakerGame: React.FC = () => {
       }
     });
   }, []);
+
+  // Generate random initial ball velocity
+  const getRandomBallVelocity = () => {
+    // Random angle between -45 and 45 degrees from vertical
+    const minAngle = -Math.PI / 4; // -45 degrees
+    const maxAngle = Math.PI / 4;  // 45 degrees
+    const angle = minAngle + Math.random() * (maxAngle - minAngle);
+    
+    const speed = 4;
+    return {
+      dx: Math.sin(angle) * speed,
+      dy: -Math.cos(angle) * speed // Negative to go upward
+    };
+  };
+
   // Reset game
   const resetGame = useCallback(() => {
     gameObjects.current.paddle.x = CANVAS_WIDTH / 2 - PADDLE_WIDTH / 2;
     gameObjects.current.ball.x = CANVAS_WIDTH / 2;
     gameObjects.current.ball.y = CANVAS_HEIGHT / 2;
-    gameObjects.current.ball.dx = 4;
-    gameObjects.current.ball.dy = -4;
+    const { dx, dy } = getRandomBallVelocity();
+    gameObjects.current.ball.dx = dx;
+    gameObjects.current.ball.dy = dy;
     gameObjects.current.bricks = initializeBricks();
     particlesRef.current = [];
     starsRef.current = initializeStars();
@@ -256,6 +272,9 @@ const TypeBreakerGame: React.FC = () => {
   const startGame = useCallback(() => {
     gameObjects.current.bricks = initializeBricks();
     starsRef.current = initializeStars();
+    const { dx, dy } = getRandomBallVelocity();
+    gameObjects.current.ball.dx = dx;
+    gameObjects.current.ball.dy = dy;
     setGameState(prev => ({ ...prev, gameStarted: true }));
   }, [initializeBricks, initializeStars]);
 
@@ -692,11 +711,12 @@ const TypeBreakerGame: React.FC = () => {
         return { ...prev, lives: newLives };
       });
       
-      // Reset ball position
+      // Reset ball position with random velocity
       ball.x = CANVAS_WIDTH / 2;
       ball.y = CANVAS_HEIGHT / 2;
-      ball.dx = 4;
-      ball.dy = -4;
+      const { dx, dy } = getRandomBallVelocity();
+      ball.dx = dx;
+      ball.dy = dy;
       
       // Clear target
       setTargetBrick(null);
