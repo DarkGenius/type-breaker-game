@@ -892,7 +892,7 @@ const TypeBreakerGame: React.FC = () => {
         )}
         
         {!gameState.gameStarted && (
-          <div className="absolute inset-0 flex items-center justify-center">
+          <div className="absolute inset-0 flex items-end justify-center pb-20">
             <button
               onClick={startGame}
               className="px-8 py-4 bg-gradient-to-r from-pink-500 to-purple-600 text-white font-bold text-xl rounded-lg shadow-lg hover:from-pink-600 hover:to-purple-700 transition-all duration-200 transform hover:scale-105"
