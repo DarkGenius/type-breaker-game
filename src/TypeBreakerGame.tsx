@@ -7,6 +7,7 @@ interface GameState {
   gameWon: boolean;
   paused: boolean;
   letterMode: boolean;
+  gameStarted: boolean;
 }
 
 interface Paddle {
@@ -71,7 +72,8 @@ const TypeBreakerGame: React.FC = () => {
     gameOver: false,
     gameWon: false,
     paused: false,
-    letterMode: true // true = letter mode, false = classic mode
+    letterMode: true, // true = letter mode, false = classic mode
+    gameStarted: false
   });
 
   const [pressedKeys, setPressedKeys] = useState<Set<string>>(new Set());
@@ -245,9 +247,17 @@ const TypeBreakerGame: React.FC = () => {
       gameOver: false,
       gameWon: false,
       paused: false,
-      letterMode: gameState.letterMode // Keep current mode when resetting
+      letterMode: gameState.letterMode, // Keep current mode when resetting
+      gameStarted: true // Keep the game started after reset
     });
   }, [initializeBricks, initializeStars, gameState.letterMode]);
+
+  // Start game function
+  const startGame = useCallback(() => {
+    gameObjects.current.bricks = initializeBricks();
+    starsRef.current = initializeStars();
+    setGameState(prev => ({ ...prev, gameStarted: true }));
+  }, [initializeBricks, initializeStars]);
 
   // Draw functions
   const drawBackground = (ctx: CanvasRenderingContext2D) => {
@@ -380,6 +390,33 @@ const TypeBreakerGame: React.FC = () => {
   };
 
   const drawUI = (ctx: CanvasRenderingContext2D, currentGameState: GameState) => {
+    // Show start screen if game hasn't started
+    if (!currentGameState.gameStarted) {
+      // Semi-transparent background
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      
+      // Title
+      ctx.fillStyle = '#FECA57';
+      ctx.font = 'bold 64px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('Type Breaker', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 100);
+      
+      // Subtitle
+      ctx.fillStyle = '#4ECDC4';
+      ctx.font = '28px Arial';
+      ctx.fillText('Learn Touch Typing While Having Fun!', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 40);
+      
+      // Instructions
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '20px Arial';
+      ctx.fillText('Click "Start Game" to begin', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 20);
+      
+      ctx.textAlign = 'left';
+      return;
+    }
+    
+    // Normal game UI
     ctx.fillStyle = '#ffffff';
     ctx.font = '24px Arial';
     ctx.fillText(`Score: ${currentGameState.score}`, 20, 30);
@@ -684,16 +721,22 @@ const TypeBreakerGame: React.FC = () => {
     // Clear canvas
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     
-    // Draw everything
+    // Always draw background and UI
     drawBackground(ctx);
-    drawBricks(ctx);
-    drawParticles(ctx);
-    drawPaddle(ctx);
-    drawBall(ctx);
+    
+    // Only draw game elements if game has started
+    if (gameState.gameStarted) {
+      drawBricks(ctx);
+      drawParticles(ctx);
+      drawPaddle(ctx);
+      drawBall(ctx);
+    }
+    
+    // Always draw UI (handles both start screen and game UI)
     drawUI(ctx, gameState);
     
-    // Update game state only if not paused
-    if (!gameState.paused && !gameState.gameOver && !gameState.gameWon) {
+    // Update game state only if game has started and not paused
+    if (gameState.gameStarted && !gameState.paused && !gameState.gameOver && !gameState.gameWon) {
       const paddle = gameObjects.current.paddle;
       const ball = gameObjects.current.ball;
       
@@ -718,6 +761,11 @@ const TypeBreakerGame: React.FC = () => {
     
     // Update particles even when paused for smooth animation
     updateParticles();
+    
+    // Update stars even when game hasn't started for animated background
+    if (!gameState.gameStarted || gameState.paused) {
+      updateStars();
+    }
     
     // Continue loop
     gameLoopRef.current = requestAnimationFrame(gameLoop);
@@ -818,10 +866,14 @@ const TypeBreakerGame: React.FC = () => {
         <h1 className="text-4xl font-bold mb-2 text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-purple-600">
           Type Breaker
         </h1>
-        <p className="text-lg mb-2">Use ← → arrow keys to move paddle</p>
-        <p className="text-sm mb-1">Letter Mode: Press the letter on each block just before the ball hits it!</p>
-        <p className="text-sm mb-1">Classic Mode: Just break blocks with the ball!</p>
-        <p className="text-sm">Press 0 to switch modes • Press SPACE to pause • Press R to restart when game ends</p>
+        {gameState.gameStarted && (
+          <>
+            <p className="text-lg mb-2">Use ← → arrow keys to move paddle</p>
+            <p className="text-sm mb-1">Letter Mode: Press the letter on each block just before the ball hits it!</p>
+            <p className="text-sm mb-1">Classic Mode: Just break blocks with the ball!</p>
+            <p className="text-sm">Press 0 to switch modes • Press SPACE to pause • Press R to restart when game ends</p>
+          </>
+        )}
       </div>
       
       <div className="relative">
@@ -838,15 +890,28 @@ const TypeBreakerGame: React.FC = () => {
             <div className="text-white text-3xl font-bold">PAUSED</div>
           </div>
         )}
+        
+        {!gameState.gameStarted && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <button
+              onClick={startGame}
+              className="px-8 py-4 bg-gradient-to-r from-pink-500 to-purple-600 text-white font-bold text-xl rounded-lg shadow-lg hover:from-pink-600 hover:to-purple-700 transition-all duration-200 transform hover:scale-105"
+            >
+              Start Game
+            </button>
+          </div>
+        )}
       </div>
       
-      <div className="mt-4 text-white text-center">
-        <div className="grid grid-cols-3 gap-8 text-lg">
-          <div>Score: <span className="font-bold text-yellow-400">{gameState.score}</span></div>
-          <div>Lives: <span className="font-bold text-red-400">{gameState.lives}</span></div>
-          <div>Level: <span className="font-bold text-blue-400">1</span></div>
+      {gameState.gameStarted && (
+        <div className="mt-4 text-white text-center">
+          <div className="grid grid-cols-3 gap-8 text-lg">
+            <div>Score: <span className="font-bold text-yellow-400">{gameState.score}</span></div>
+            <div>Lives: <span className="font-bold text-red-400">{gameState.lives}</span></div>
+            <div>Level: <span className="font-bold text-blue-400">1</span></div>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
