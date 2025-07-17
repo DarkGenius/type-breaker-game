@@ -91,14 +91,15 @@ const TypeBreakerGame: React.FC = () => {
   // Game constants - different sizes for mobile
   const CANVAS_WIDTH = 800;
   const CANVAS_HEIGHT = 600;
-  const PADDLE_WIDTH = isMobile ? 120 : 100;
-  const PADDLE_HEIGHT = isMobile ? 20 : 15;
-  const BALL_SIZE = isMobile ? 16 : 12;
-  const BRICK_WIDTH = isMobile ? 90 : 72;
-  const BRICK_HEIGHT = isMobile ? 35 : 25;
-  const BRICK_ROWS = isMobile ? 5 : 6;
-  const BRICK_COLS = isMobile ? 8 : 10;
-  const LETTER_PRESS_WINDOW = 500; // milliseconds before ball hits block
+  const PADDLE_WIDTH = isMobile ? 150 : 100;
+  const PADDLE_HEIGHT = isMobile ? 25 : 15;
+  const BALL_SIZE = isMobile ? 20 : 12;
+  const BALL_SPEED = 4; // ← ИЗМЕНЯЙ ЭТО ЗНАЧЕНИЕ ДЛЯ ОТЛАДКИ СКОРОСТИ ШАРИКА
+  const BRICK_WIDTH = isMobile ? 120 : 72;
+  const BRICK_HEIGHT = isMobile ? 45 : 25;
+  const BRICK_ROWS = isMobile ? 4 : 6;
+  const BRICK_COLS = isMobile ? 6 : 10;
+  const LETTER_PRESS_WINDOW = isMobile ? 1000 : 500; // milliseconds before ball hits block (longer for mobile)
 
   // Game objects
   const gameObjects = useRef<{
@@ -107,19 +108,19 @@ const TypeBreakerGame: React.FC = () => {
     bricks: Brick[];
   }>({
     paddle: {
-      x: CANVAS_WIDTH / 2 - (isMobile ? 60 : 50),
+      x: CANVAS_WIDTH / 2 - (isMobile ? 75 : 50),
       y: CANVAS_HEIGHT - 40,
-      width: isMobile ? 120 : 100,
-      height: isMobile ? 20 : 15,
+      width: isMobile ? 150 : 100,
+      height: isMobile ? 25 : 15,
       speed: 8
     },
     ball: {
       x: CANVAS_WIDTH / 2,
       y: CANVAS_HEIGHT - 150, // Closer to paddle
-      dx: 4,
-      dy: -4,
-      size: isMobile ? 16 : 12,
-      speed: 4
+      dx: BALL_SPEED,
+      dy: -BALL_SPEED,
+      size: isMobile ? 20 : 12,
+      speed: BALL_SPEED
     },
     bricks: []
   });
@@ -241,7 +242,7 @@ const TypeBreakerGame: React.FC = () => {
     const maxAngle = Math.PI / 4;  // 45 degrees
     const angle = minAngle + Math.random() * (maxAngle - minAngle);
     
-    const speed = 4;
+    const speed = BALL_SPEED;
     return {
       dx: Math.sin(angle) * speed,
       dy: -Math.cos(angle) * speed // Negative to go upward
@@ -271,7 +272,7 @@ const TypeBreakerGame: React.FC = () => {
       letterMode: gameState.letterMode, // Keep current mode when resetting
       gameStarted: true // Keep the game started after reset
     });
-  }, [initializeBricks, initializeStars, gameState.letterMode, PADDLE_WIDTH, PADDLE_HEIGHT, BALL_SIZE]);
+  }, [initializeBricks, initializeStars, gameState.letterMode, PADDLE_WIDTH, PADDLE_HEIGHT, BALL_SIZE, BALL_SPEED]);
 
   // Start game function
   const startGame = useCallback(() => {
@@ -285,7 +286,7 @@ const TypeBreakerGame: React.FC = () => {
     gameObjects.current.ball.dx = dx;
     gameObjects.current.ball.dy = dy;
     setGameState(prev => ({ ...prev, gameStarted: true }));
-  }, [initializeBricks, initializeStars, PADDLE_WIDTH, PADDLE_HEIGHT, BALL_SIZE]);
+  }, [initializeBricks, initializeStars, PADDLE_WIDTH, PADDLE_HEIGHT, BALL_SIZE, BALL_SPEED]);
 
   // Draw functions
   const drawBackground = (ctx: CanvasRenderingContext2D) => {
@@ -574,7 +575,7 @@ const TypeBreakerGame: React.FC = () => {
       gameObjects.current.bricks.forEach(brick => {
         if (brick.visible) {
           const timeToHit = calculateTimeToHitBrick(ball, brick);
-          if (timeToHit !== null && timeToHit < closestTime && timeToHit <= LETTER_PRESS_WINDOW) {
+          if (timeToHit !== null && timeToHit < closestTime) {
             closestTime = timeToHit;
             closestBrick = brick;
           }
@@ -880,9 +881,10 @@ const TypeBreakerGame: React.FC = () => {
     // Check if touch is in bottom area for paddle control
     if (y > CANVAS_HEIGHT - 200) {
       const paddle = gameObjects.current.paddle;
+      const moveStep = isMobile ? 40 : 30; // Larger step for mobile
       const targetX = x < CANVAS_WIDTH / 2 ? 
-        Math.max(0, paddle.x - 30) : 
-        Math.min(CANVAS_WIDTH - paddle.width, paddle.x + 30);
+        Math.max(0, paddle.x - moveStep) : 
+        Math.min(CANVAS_WIDTH - paddle.width, paddle.x + moveStep);
       paddle.x = targetX;
     } else if (gameState.letterMode && isMobile) {
       // Check if touch is on a brick
@@ -914,9 +916,10 @@ const TypeBreakerGame: React.FC = () => {
     if (y > CANVAS_HEIGHT - 200) {
       const paddle = gameObjects.current.paddle;
       // Tap to move instead of drag
+      const moveStep = isMobile ? 40 : 30; // Larger step for mobile
       const targetX = x < CANVAS_WIDTH / 2 ? 
-        Math.max(0, paddle.x - 30) : 
-        Math.min(CANVAS_WIDTH - paddle.width, paddle.x + 30);
+        Math.max(0, paddle.x - moveStep) : 
+        Math.min(CANVAS_WIDTH - paddle.width, paddle.x + moveStep);
       paddle.x = targetX;
     }
   };
@@ -936,7 +939,9 @@ const TypeBreakerGame: React.FC = () => {
       
       // Calculate scale to fit canvas on screen
       const maxWidth = window.innerWidth - 32; // 16px padding on each side
-      const maxHeight = window.innerHeight - 200; // Space for UI elements
+      const maxHeight = mobile ? 
+        window.innerHeight - 100 : // Less space needed on mobile
+        window.innerHeight - 200; // Space for UI elements on desktop
       const scaleX = maxWidth / CANVAS_WIDTH;
       const scaleY = maxHeight / CANVAS_HEIGHT;
       const scale = Math.min(scaleX, scaleY, 1); // Don't scale up, only down
