@@ -81,7 +81,6 @@ const TypeBreakerGame: React.FC = () => {
   const [showLetterHint, setShowLetterHint] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [canvasScale, setCanvasScale] = useState(1);
-  const [touchStartX, setTouchStartX] = useState<number | null>(null);
   
   // Store particles in a ref for smooth animation
   const particlesRef = useRef<Particle[]>([]);
@@ -89,16 +88,16 @@ const TypeBreakerGame: React.FC = () => {
   // Store background stars for smooth animation
   const starsRef = useRef<Star[]>([]);
 
-  // Game constants
+  // Game constants - different sizes for mobile
   const CANVAS_WIDTH = 800;
   const CANVAS_HEIGHT = 600;
-  const PADDLE_WIDTH = 100;
-  const PADDLE_HEIGHT = 15;
-  const BALL_SIZE = 12;
-  const BRICK_WIDTH = 72;
-  const BRICK_HEIGHT = 25;
-  const BRICK_ROWS = 6;
-  const BRICK_COLS = 10;
+  const PADDLE_WIDTH = isMobile ? 120 : 100;
+  const PADDLE_HEIGHT = isMobile ? 20 : 15;
+  const BALL_SIZE = isMobile ? 16 : 12;
+  const BRICK_WIDTH = isMobile ? 90 : 72;
+  const BRICK_HEIGHT = isMobile ? 35 : 25;
+  const BRICK_ROWS = isMobile ? 5 : 6;
+  const BRICK_COLS = isMobile ? 8 : 10;
   const LETTER_PRESS_WINDOW = 500; // milliseconds before ball hits block
 
   // Game objects
@@ -108,10 +107,10 @@ const TypeBreakerGame: React.FC = () => {
     bricks: Brick[];
   }>({
     paddle: {
-      x: CANVAS_WIDTH / 2 - PADDLE_WIDTH / 2,
+      x: CANVAS_WIDTH / 2 - (isMobile ? 60 : 50),
       y: CANVAS_HEIGHT - 40,
-      width: PADDLE_WIDTH,
-      height: PADDLE_HEIGHT,
+      width: isMobile ? 120 : 100,
+      height: isMobile ? 20 : 15,
       speed: 8
     },
     ball: {
@@ -119,7 +118,7 @@ const TypeBreakerGame: React.FC = () => {
       y: CANVAS_HEIGHT - 150, // Closer to paddle
       dx: 4,
       dy: -4,
-      size: BALL_SIZE,
+      size: isMobile ? 16 : 12,
       speed: 4
     },
     bricks: []
@@ -171,7 +170,7 @@ const TypeBreakerGame: React.FC = () => {
       }
     }
     return bricks;
-  }, []);
+  }, [BRICK_COLS, BRICK_WIDTH, BRICK_HEIGHT, BRICK_ROWS]);
 
   // Create explosion particles
   const createExplosion = useCallback((brick: Brick) => {
@@ -252,8 +251,11 @@ const TypeBreakerGame: React.FC = () => {
   // Reset game
   const resetGame = useCallback(() => {
     gameObjects.current.paddle.x = CANVAS_WIDTH / 2 - PADDLE_WIDTH / 2;
+    gameObjects.current.paddle.width = PADDLE_WIDTH;
+    gameObjects.current.paddle.height = PADDLE_HEIGHT;
     gameObjects.current.ball.x = CANVAS_WIDTH / 2;
     gameObjects.current.ball.y = CANVAS_HEIGHT - 150; // Closer to paddle
+    gameObjects.current.ball.size = BALL_SIZE;
     const { dx, dy } = getRandomBallVelocity();
     gameObjects.current.ball.dx = dx;
     gameObjects.current.ball.dy = dy;
@@ -269,17 +271,21 @@ const TypeBreakerGame: React.FC = () => {
       letterMode: gameState.letterMode, // Keep current mode when resetting
       gameStarted: true // Keep the game started after reset
     });
-  }, [initializeBricks, initializeStars, gameState.letterMode]);
+  }, [initializeBricks, initializeStars, gameState.letterMode, PADDLE_WIDTH, PADDLE_HEIGHT, BALL_SIZE]);
 
   // Start game function
   const startGame = useCallback(() => {
+    gameObjects.current.paddle.width = PADDLE_WIDTH;
+    gameObjects.current.paddle.height = PADDLE_HEIGHT;
+    gameObjects.current.paddle.x = CANVAS_WIDTH / 2 - PADDLE_WIDTH / 2;
+    gameObjects.current.ball.size = BALL_SIZE;
     gameObjects.current.bricks = initializeBricks();
     starsRef.current = initializeStars();
     const { dx, dy } = getRandomBallVelocity();
     gameObjects.current.ball.dx = dx;
     gameObjects.current.ball.dy = dy;
     setGameState(prev => ({ ...prev, gameStarted: true }));
-  }, [initializeBricks, initializeStars]);
+  }, [initializeBricks, initializeStars, PADDLE_WIDTH, PADDLE_HEIGHT, BALL_SIZE]);
 
   // Draw functions
   const drawBackground = (ctx: CanvasRenderingContext2D) => {
@@ -473,7 +479,7 @@ const TypeBreakerGame: React.FC = () => {
       ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
       ctx.font = '14px Arial';
       ctx.textAlign = 'center';
-      ctx.fillText('Touch bottom area to control paddle', CANVAS_WIDTH / 2, CANVAS_HEIGHT - 10);
+      ctx.fillText('Tap left/right side to move paddle', CANVAS_WIDTH / 2, CANVAS_HEIGHT - 10);
       ctx.textAlign = 'left';
     }
     
@@ -873,7 +879,11 @@ const TypeBreakerGame: React.FC = () => {
     
     // Check if touch is in bottom area for paddle control
     if (y > CANVAS_HEIGHT - 200) {
-      setTouchStartX(x);
+      const paddle = gameObjects.current.paddle;
+      const targetX = x < CANVAS_WIDTH / 2 ? 
+        Math.max(0, paddle.x - 30) : 
+        Math.min(CANVAS_WIDTH - paddle.width, paddle.x + 30);
+      paddle.x = targetX;
     } else if (gameState.letterMode && isMobile) {
       // Check if touch is on a brick
       gameObjects.current.bricks.forEach(brick => {
@@ -891,7 +901,6 @@ const TypeBreakerGame: React.FC = () => {
 
   const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
     if (!gameState.gameStarted || gameState.paused || gameState.gameOver || gameState.gameWon) return;
-    if (touchStartX === null) return;
     
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -899,18 +908,20 @@ const TypeBreakerGame: React.FC = () => {
     const rect = canvas.getBoundingClientRect();
     const touch = e.touches[0];
     const x = (touch.clientX - rect.left) / canvasScale;
+    const y = (touch.clientY - rect.top) / canvasScale;
     
-    // Move paddle based on touch position
-    const paddle = gameObjects.current.paddle;
-    paddle.x = x - paddle.width / 2;
-    
-    // Clamp paddle position
-    if (paddle.x < 0) paddle.x = 0;
-    if (paddle.x > CANVAS_WIDTH - paddle.width) paddle.x = CANVAS_WIDTH - paddle.width;
+    // Only move paddle if touching in the control area
+    if (y > CANVAS_HEIGHT - 200) {
+      const paddle = gameObjects.current.paddle;
+      // Tap to move instead of drag
+      const targetX = x < CANVAS_WIDTH / 2 ? 
+        Math.max(0, paddle.x - 30) : 
+        Math.min(CANVAS_WIDTH - paddle.width, paddle.x + 30);
+      paddle.x = targetX;
+    }
   };
 
   const handleTouchEnd = () => {
-    setTouchStartX(null);
     if (isMobile && gameState.letterMode) {
       setPressedKeys(new Set());
     }
@@ -984,7 +995,7 @@ const TypeBreakerGame: React.FC = () => {
           <>
             {isMobile ? (
               <>
-                <p className="text-lg mb-2">Touch bottom area to move paddle</p>
+                <p className="text-lg mb-2">Tap left/right side to move paddle</p>
                 <p className="text-sm mb-1">Letter Mode: Tap the highlighted block before the ball hits it!</p>
                 <p className="text-sm mb-1">Classic Mode: Just break blocks with the ball!</p>
               </>
@@ -1026,6 +1037,17 @@ const TypeBreakerGame: React.FC = () => {
               className="px-8 py-4 bg-gradient-to-r from-pink-500 to-purple-600 text-white font-bold text-xl rounded-lg shadow-lg hover:from-pink-600 hover:to-purple-700 transition-all duration-200 transform hover:scale-105"
             >
               Start Game
+            </button>
+          </div>
+        )}
+        
+        {isMobile && (gameState.gameOver || gameState.gameWon) && (
+          <div className="absolute inset-0 flex items-end justify-center pb-20">
+            <button
+              onClick={resetGame}
+              className="px-8 py-4 bg-gradient-to-r from-pink-500 to-purple-600 text-white font-bold text-xl rounded-lg shadow-lg hover:from-pink-600 hover:to-purple-700 transition-all duration-200 transform hover:scale-105"
+            >
+              Restart
             </button>
           </div>
         )}
