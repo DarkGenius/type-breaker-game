@@ -113,7 +113,7 @@ const TypeBreakerGame: React.FC = () => {
     },
     ball: {
       x: CANVAS_WIDTH / 2,
-      y: CANVAS_HEIGHT / 2,
+      y: CANVAS_HEIGHT - 150, // Closer to paddle
       dx: 4,
       dy: -4,
       size: BALL_SIZE,
@@ -250,7 +250,7 @@ const TypeBreakerGame: React.FC = () => {
   const resetGame = useCallback(() => {
     gameObjects.current.paddle.x = CANVAS_WIDTH / 2 - PADDLE_WIDTH / 2;
     gameObjects.current.ball.x = CANVAS_WIDTH / 2;
-    gameObjects.current.ball.y = CANVAS_HEIGHT / 2;
+    gameObjects.current.ball.y = CANVAS_HEIGHT - 150; // Closer to paddle
     const { dx, dy } = getRandomBallVelocity();
     gameObjects.current.ball.dx = dx;
     gameObjects.current.ball.dy = dy;
@@ -713,7 +713,7 @@ const TypeBreakerGame: React.FC = () => {
       
       // Reset ball position with random velocity
       ball.x = CANVAS_WIDTH / 2;
-      ball.y = CANVAS_HEIGHT / 2;
+      ball.y = CANVAS_HEIGHT - 150; // Closer to paddle
       const { dx, dy } = getRandomBallVelocity();
       ball.dx = dx;
       ball.dy = dy;
